@@ -39,34 +39,74 @@ exports.login = async (req, res) => {
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ message: 'email requerido' });
+
   try {
     const user = await User.findOne({ where: { email } });
-    if (!user) return res.status(200).json({ message: 'Si existe, se envió email' }); // no revelar existencia
+    // Respuesta genérica: no revelar existencia
+    if (!user) return res.status(200).json({ message: 'Si existe, se envió email' });
 
-    // Generate token
+    // Generar token y guardar HASH en la DB (campos: userId, token_hash, expires_at)
     const token = crypto.randomBytes(32).toString('hex');
     const token_hash = crypto.createHash('sha256').update(token).digest('hex');
-    const expires_at = new Date(Date.now() + 60*60*1000); // 1 hora
-    await PasswordReset.create({ userId: user.id, token_hash, expires_at });
+    const expires_at = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+
+    // DEBUG opcional para ver lo que se va a insertar
+    console.log('[FORGOT] create payload =>', { userId: user.id, token_hash, expires_at });
+
+    await PasswordReset.create({
+      userId: user.id,
+      token_hash,
+      expires_at,
+    });
 
     const resetLink = `${process.env.BASE_URL}/auth/reset-password?token=${token}&id=${user.id}`;
-    await sendEmail(user.email, 'Recuperar contraseña', `Usa este link: ${resetLink}`);
+
+    // No dejar que un fallo de SMTP rompa el endpoint
+    try {
+      await sendEmail(user.email, 'Recuperar contraseña', `Usa este link: ${resetLink}`);
+    } catch (mailErr) {
+      console.error('[MAILER] Error al enviar correo:', mailErr.message);
+      console.log('[MAILER] ResetLink (dev):', resetLink);
+    }
 
     return res.json({ message: 'Si existe, se envió email' });
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Error interno' }); }
+  } catch (err) {
+    console.error('[FORGOT] Error inesperado:', err);
+    return res.status(500).json({ message: 'Error interno' });
+  }
 };
 
 exports.resetPassword = async (req, res) => {
   const { token, id, newPassword } = req.body;
-  if (!token || !id || !newPassword) return res.status(400).json({ message: 'token, id y nueva contraseña requeridos' });
+  if (!token || !id || !newPassword) {
+    return res.status(400).json({ message: 'token, id y nueva contraseña requeridos' });
+  }
   try {
-    const token_hash = crypto.createHash('sha256').update(token).digest('hex');
-    const record = await PasswordReset.findOne({ where: { userId: id, token_hash } });
-    if (!record || record.expires_at < new Date()) return res.status(400).json({ message: 'Token inválido o expirado' });
+    // 1) Verificar usuario
+    const user = await User.findByPk(id);
+    if (!user) return res.status(400).json({ message: 'Usuario inválido' });
 
+    // 2) Buscar el registro por userId + token_hash
+    const token_hash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const record = await PasswordReset.findOne({
+      where: { userId: user.id, token_hash }
+    });
+
+    if (!record || record.expires_at < new Date()) {
+      return res.status(400).json({ message: 'Token inválido o expirado' });
+    }
+
+    // 3) Actualizar contraseña del usuario
     const password_hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-    await User.update({ password_hash }, { where: { id }});
-    await PasswordReset.destroy({ where: { id: record.id }});
+    await User.update({ password_hash }, { where: { id: user.id } });
+
+    // 4) Invalidar el registro usado
+    await PasswordReset.destroy({ where: { id: record.id } });
+
     return res.json({ message: 'Contraseña actualizada' });
-  } catch (err) { console.error(err); res.status(500).json({ message: 'Error interno' }); }
+  } catch (err) {
+    console.error('[RESET] Error inesperado:', err);
+    return res.status(500).json({ message: 'Error interno' });
+  }
 };
