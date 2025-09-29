@@ -1,4 +1,3 @@
-// utils/email.js
 const nodemailer = require('nodemailer');
 
 const HOST = process.env.SMTP_HOST;
@@ -7,7 +6,7 @@ const USER = process.env.SMTP_USER;
 const PASS = process.env.SMTP_PASS;
 
 if (!HOST || !PORT || !USER || !PASS) {
-  // Log claro en dev; evita incluir PASS
+
   console.error('[MAILER] Faltan variables SMTP:', {
     host: HOST, port: PORT, user: USER, pass_present: Boolean(PASS),
   });
@@ -16,7 +15,7 @@ if (!HOST || !PORT || !USER || !PASS) {
 const transporter = nodemailer.createTransport({
   host: HOST,
   port: PORT,
-  secure: PORT === 465, // SSL en 465; STARTTLS en 587/2525
+  secure: PORT === 465, 
   auth: { user: USER, pass: PASS },
 });
 

@@ -1,11 +1,11 @@
-// models/PasswordReset.js
+
 const { DataTypes } = require('sequelize');
 const sequelize = require('../db');
 
 const PasswordReset = sequelize.define('PasswordReset', {
   id: { 
     type: DataTypes.UUID, 
-    defaultValue: DataTypes.UUIDV4,  // Genera UUID automáticamente
+    defaultValue: DataTypes.UUIDV4,  
     primaryKey: true 
   },
   userId: { type: DataTypes.UUID, allowNull: false },

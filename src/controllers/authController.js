@@ -59,7 +59,7 @@ exports.forgotPassword = async (req, res) => {
       expires_at,
     });
 
-    const resetLink = `${process.env.BASE_URL}/auth/reset-password?token=${token}&id=${user.id}`;
+    const resetLink = `${process.env.BASE_URL}/auth_frontend.html?token=${token}&id=${user.id}`;
 
     // No dejar que un fallo de SMTP rompa el endpoint
     try {
